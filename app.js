@@ -16,7 +16,7 @@ app.use(cors({
 }))
 
 app.use(express.json({ limit: "1mb" }))
-app.use(cookieParser())
+app.use(cookieParser(process.env.COOKIE_SECRET))
 app.use(morgan("dev"))
 app.use("/api/auth", authRoutes)
 app.use("/api/stickers", stickerRoutes)
@@ -24,14 +24,5 @@ app.use("/api/stickers", stickerRoutes)
 app.get("/", (req, res) => {
   res.json({ message: "API Running" })
 })
-
-// const { protect } = require("./src/middlewares/authMiddleware")
-
-// app.get("/api/test-protected", protect, (req, res) => {
-//   res.json({
-//     message: "You accessed protected route",
-//     user: req.user
-//   })
-// })
 
 module.exports = app

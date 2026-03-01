@@ -1,4 +1,5 @@
 const Sticker = require("../models/Sticker")
+const User = require("../models/User")
 const cloudinary = require("../config/cloudinary")
 const { fileTypeFromBuffer } = require("file-type")
 
@@ -87,5 +88,85 @@ exports.getStickerById = async (req, res) => {
   } catch (error) {
     console.error(error)
     res.status(500).json({ message: error.message })
+  }
+}
+
+exports.downloadSticker = async (req, res) => {
+  try {
+    const sticker = await Sticker.findById(req.params.id)
+
+    if (!sticker) {
+      return res.status(404).json({ message: "Sticker not found" })
+    }
+
+    const now = new Date()
+
+    // 🔐 Logged-in user
+    if (req.user) {
+      await Sticker.findByIdAndUpdate(sticker._id, {
+        $inc: { downloads: 1 }
+      })
+
+      await User.findByIdAndUpdate(req.user._id, {
+        $inc: { downloadsToday: 1 }
+      })
+
+      return res.json({
+        imageUrl: sticker.imageUrl,
+        downloads: sticker.downloads + 1
+      })
+    }
+
+    // 👤 Guest user
+    const cookieName = "guestDownloads"
+    let guestData = req.signedCookies[cookieName]
+
+    if (!guestData) {
+      const resetAt = new Date()
+      resetAt.setHours(24, 0, 0, 0)
+
+      guestData = {
+        count: 1,
+        resetAt
+      }
+    } else {
+      const resetAt = new Date(guestData.resetAt)
+
+      if (now > resetAt) {
+        const newReset = new Date()
+        newReset.setHours(24, 0, 0, 0)
+
+        guestData = {
+          count: 1,
+          resetAt: newReset
+        }
+      } else {
+        if (guestData.count >= 10) {
+          return res.status(403).json({
+            message: "Daily guest download limit reached. Please login."
+          })
+        }
+
+        guestData.count += 1
+      }
+    }
+
+    res.cookie(cookieName, guestData, {
+      httpOnly: true,
+      signed: true,
+      sameSite: "strict"
+    })
+
+    await Sticker.findByIdAndUpdate(sticker._id, {
+      $inc: { downloads: 1 }
+    })
+
+    return res.json({
+      imageUrl: sticker.imageUrl,
+      downloads: sticker.downloads + 1
+    })
+
+  } catch (error) {
+    return res.status(500).json({ message: "Server error" })
   }
 }
